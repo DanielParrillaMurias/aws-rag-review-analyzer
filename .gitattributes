@@ -1,0 +1,7 @@
+# Establece el comportamiento por defecto para todos los archivos
+* text=auto eol=lf
+
+# A los archivos que son explícitamente binarios no se les debe tocar los finales de línea
+*.png binary
+*.jpg binary
+*.zip binary
