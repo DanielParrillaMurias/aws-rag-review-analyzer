@@ -1,52 +1,54 @@
 import json
 from scraper import scrape_imdb_reviews
+from bedrock_analyzer import analyze_reviews
 
 
 def handler(event, context):
     """
-    Punto de entrada para la ejecución de AWS Lambda.
-    Extrae una URL del evento de entrada, la scrapea y devuelve las reseñas.
+    Orquesta el proceso: Scrape -> Analyze -> Respond.
     """
     print("Iniciando la ejecución de la función Lambda.")
 
-    # --- CAMBIO CLAVE: Obtener la URL del evento de entrada ---
-    # Usamos event.get('url') para evitar un error si la clave 'url' no existe.
     movie_url = event.get('url')
-
-    # --- NUEVO: Añadir validación de la entrada ---
     if not movie_url:
         print("Error: No se proporcionó ninguna 'url' en el evento de entrada.")
         return {
-            "statusCode": 400,  # 400 Bad Request es el código correcto para un error del cliente
-            "body": json.dumps({
-                "message": "El parámetro 'url' es requerido en el evento de entrada."
-            })
+            "statusCode": 400,
+            "body": json.dumps({"message": "El parámetro 'url' es requerido."})
         }
 
+    # --- PASO 1: RETRIEVE (Recuperar) ---
     print(f"Scrapeando la URL: {movie_url}")
     reviews = scrape_imdb_reviews(movie_url)
 
-    if reviews is not None:
-        print(f"Scraping exitoso. Se encontraron {len(reviews)} reseñas.")
-        response = {
-            "statusCode": 200,
-            "body": json.dumps({
-                "message": "Reseñas extraídas con éxito",
-                "source_url": movie_url,  # Buena práctica: devolver la fuente que se procesó
-                "review_count": len(reviews),
-                # Devolvemos solo las 5 primeras para no hacer la respuesta demasiado grande
-                "reviews": reviews[:5]
-            })
-        }
-    else:
-        print("El scraping falló.")
-        response = {
+    if reviews is None or not reviews:
+        print("El scraping falló o no se encontraron reseñas.")
+        return {
             "statusCode": 500,
-            "body": json.dumps({
-                "message": "Ocurrió un error durante el scraping.",
-                "source_url": movie_url
-            })
+            "body": json.dumps({"message": "No se pudieron obtener las reseñas."})
         }
 
-    print("Finalizando la ejecución de la función Lambda.")
+    print(f"Scraping exitoso. Se encontraron {len(reviews)} reseñas.")
+
+    # --- PASO 2: AUGMENT & GENERATE (Aumentar y Generar) ---
+    analysis_result = analyze_reviews(reviews)
+
+    if analysis_result is None:
+        print("El análisis con Bedrock falló.")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"message": "Ocurrió un error durante el análisis de IA."})
+        }
+
+    # --- PASO 3: RESPONDER ---
+    print("Proceso completado con éxito.")
+    response = {
+        "statusCode": 200,
+        "body": json.dumps({
+            "message": "Análisis completado con éxito",
+            "source_url": movie_url,
+            "analysis": analysis_result  # <-- DEVOLVEMOS EL ANÁLISIS DE BEDROCK
+        })
+    }
+
     return response
