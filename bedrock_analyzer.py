@@ -1,45 +1,60 @@
 import boto3
 import json
+import re
 
-# Inicializamos el cliente de Bedrock fuera del handler para reutilizar la conexión
-# Es una mejor práctica para el rendimiento en Lambda
+# Inicializamos el cliente
 bedrock_client = boto3.client(
     service_name="bedrock-runtime", region_name="eu-west-1")
-
 MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"
 
 
+def clean_json_output(text):
+    """
+    Limpia la respuesta del LLM para extraer solo el JSON válido.
+    Elimina etiquetas Markdown como ```json ... ``` y texto introductorio.
+    """
+    # Buscar contenido entre etiquetas de código ```json ... ``` o ``` ... ```
+    pattern = r"```(?:json)?\s*(.*?)```"
+    match = re.search(pattern, text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    # Si no hay etiquetas, intentamos encontrar el primer '{' y el último '}'
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end != -1:
+        return text[start:end+1]
+
+    return text.strip()
+
+
 def analyze_reviews(reviews):
-    """
-    Analiza una lista de reseñas usando Amazon Bedrock con Claude 3 Sonnet.
-    """
     print(f"Iniciando análisis con Bedrock para {len(reviews)} reseñas.")
 
-    # Unimos las reseñas en un solo bloque de texto para el prompt
     reviews_text = "\n".join(
         f"<review>{review}</review>" for review in reviews)
 
-    # --- Prompt Engineering ---
-    # Este es el prompt que le daremos al modelo.
-    # Usamos etiquetas XML para delimitar claramente las secciones.
-    # Le pedimos explícitamente una salida en formato JSON.
     prompt = f"""
-        Human: Eres un experto analista de opiniones de clientes. Te he proporcionado una serie de reseñas de una película entre etiquetas <reviews>.
-        Tu tarea es realizar un análisis de sentimiento y resumir los puntos clave.
-        Por favor, analiza todas las reseñas en conjunto y proporciona una respuesta en formato JSON con las siguientes claves:
-        - "sentiment": Un valor que puede ser "Positivo", "Negativo" o "Mixto".
-        - "summary": Un resumen conciso de 2-3 frases sobre la opinión general de la película.
-        - "pros": Una lista de 3 a 5 puntos positivos clave mencionados en las reseñas.
-        - "cons": Una lista de 3 a 5 puntos negativos clave mencionados en las reseñas.
+        Human: Eres un experto analista. Analiza las siguientes reseñas de películas dentro de <reviews>.
+        Genera una respuesta EXCLUSIVAMENTE en formato JSON válido.
+        No incluyas texto introductorio ni explicaciones fuera del JSON.
+        
+        El formato debe ser:
+        {{
+            "sentiment": "Positivo/Negativo/Mixto",
+            "summary": "Resumen breve",
+            "pros": ["pro1", "pro2"],
+            "cons": ["con1", "con2"]
+        }}
 
         <reviews>
         {reviews_text}
         </reviews>
 
-        Assistant:
+        Assistant: {{
     """
+    # Truco: Pre-llenamos el inicio del JSON "{" en el prompt para forzar a Claude a seguir el formato.
 
-    # --- Construcción del Payload para Bedrock (específico de Claude 3) ---
     request_body = {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 2048,
@@ -52,23 +67,41 @@ def analyze_reviews(reviews):
     }
 
     try:
-        # --- Invocación del Modelo ---
         response = bedrock_client.invoke_model(
             modelId=MODEL_ID,
             body=json.dumps(request_body),
         )
 
-        # --- Procesamiento de la Respuesta ---
         response_body_raw = response["body"].read()
         response_body = json.loads(response_body_raw)
 
-        # La respuesta de Claude 3 está dentro de una estructura anidada
-        analysis_text = response_body["content"][0]["text"]
+        raw_analysis_text = response_body["content"][0]["text"]
 
-        print("Análisis de Bedrock recibido con éxito.")
-        # Convertimos el texto de la respuesta (que debería ser un JSON) en un diccionario de Python
-        return json.loads(analysis_text)
+        print(f"DEBUG - Respuesta cruda de Bedrock: {raw_analysis_text}")
+
+        full_text = raw_analysis_text.strip()
+        if not full_text.startswith("{"):
+            full_text = "{" + full_text
+
+        # Limpieza básica
+        cleaned_text = clean_json_output(full_text)
+
+        # --- CORRECCIÓN ROBUSTA AQUÍ ---
+        try:
+            # Intentamos leerlo normal
+            return json.loads(cleaned_text)
+        except json.JSONDecodeError as e:
+            # Si falla porque hay "Extra data" (basura al final), usamos raw_decode
+            # raw_decode lee hasta donde es válido y para.
+            if "Extra data" in e.msg:
+                print(
+                    "DEBUG - Detectado 'Extra data' (posible llave duplicada), recuperando JSON válido...")
+                obj, _ = json.JSONDecoder().raw_decode(cleaned_text)
+                return obj
+            else:
+                # Si es otro error, que falle
+                raise e
 
     except Exception as e:
-        print(f"Error al invocar el modelo de Bedrock: {e}")
+        print(f"Error CRÍTICO en analyze_reviews: {e}")
         return None

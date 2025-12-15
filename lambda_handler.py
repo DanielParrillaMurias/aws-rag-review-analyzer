@@ -4,51 +4,47 @@ from bedrock_analyzer import analyze_reviews
 
 
 def handler(event, context):
-    """
-    Orquesta el proceso: Scrape -> Analyze -> Respond.
-    """
-    print("Iniciando la ejecución de la función Lambda.")
+    print("Iniciando ejecución Lambda...")
 
-    movie_url = event.get('url')
+    # --- ADAPTADOR PARA API GATEWAY ---
+    # Si la petición viene de API Gateway, los datos están dentro de 'body' como string
+    if 'body' in event:
+        try:
+            # Parseamos el string JSON que viene en el body
+            body_data = json.loads(event['body'])
+            movie_url = body_data.get('url')
+        except Exception as e:
+            print(f"Error parseando el body: {e}")
+            return {"statusCode": 400, "body": json.dumps({"message": "JSON inválido en el body"})}
+    else:
+        # Si viene de la consola de test directa
+        movie_url = event.get('url')
+
+    # --- VALIDACIÓN ---
     if not movie_url:
-        print("Error: No se proporcionó ninguna 'url' en el evento de entrada.")
         return {
             "statusCode": 400,
-            "body": json.dumps({"message": "El parámetro 'url' es requerido."})
+            "body": json.dumps({"message": "Falta el parámetro 'url'"})
         }
 
-    # --- PASO 1: RETRIEVE (Recuperar) ---
-    print(f"Scrapeando la URL: {movie_url}")
+    # --- LÓGICA EXISTENTE ---
+    print(f"Procesando URL: {movie_url}")
+
     reviews = scrape_imdb_reviews(movie_url)
+    if not reviews:
+        return {"statusCode": 500, "body": json.dumps({"message": "Error obteniendo reseñas"})}
 
-    if reviews is None or not reviews:
-        print("El scraping falló o no se encontraron reseñas.")
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"message": "No se pudieron obtener las reseñas."})
-        }
+    analysis = analyze_reviews(reviews)
+    if not analysis:
+        return {"statusCode": 500, "body": json.dumps({"message": "Error en análisis de IA"})}
 
-    print(f"Scraping exitoso. Se encontraron {len(reviews)} reseñas.")
-
-    # --- PASO 2: AUGMENT & GENERATE (Aumentar y Generar) ---
-    analysis_result = analyze_reviews(reviews)
-
-    if analysis_result is None:
-        print("El análisis con Bedrock falló.")
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"message": "Ocurrió un error durante el análisis de IA."})
-        }
-
-    # --- PASO 3: RESPONDER ---
-    print("Proceso completado con éxito.")
-    response = {
+    return {
         "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json; charset=utf-8"
+        },
         "body": json.dumps({
-            "message": "Análisis completado con éxito",
-            "source_url": movie_url,
-            "analysis": analysis_result  # <-- DEVOLVEMOS EL ANÁLISIS DE BEDROCK
-        })
+            "message": "Éxito",
+            "data": analysis
+        }, ensure_ascii=False)  # Para que se vean bien las tildes y caracteres especiales
     }
-
-    return response

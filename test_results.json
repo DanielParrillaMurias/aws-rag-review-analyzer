@@ -1,0 +1,18 @@
+{
+  "message": "Éxito",
+  "data": {
+    "sentiment": "Positivo",
+    "summary": "La mayoría de las reseñas elogian a 'El Padrino' como una obra maestra del cine, destacando su dirección, actuaciones, guión, musicalización y cinematografía sobresalientes, convirtiéndola en una de las mejores películas de todos los tiempos.",
+    "pros": [
+      "Actuaciones icónicas de Marlon Brando, Al Pacino y el reparto",
+      "Dirección y guión impecables de Francis Ford Coppola",
+      "Memorable musicalización y cinematografía cautivadora",
+      "Historia cautivante y profunda sobre familia, lealtad y crimen organizado",
+      "Considerada una de las mejores películas jamás realizadas"
+    ],
+    "cons": [
+      "Algunas críticas menores sobre el ritmo lento en algunas partes",
+      "Demasiada violencia para algunos espectadores"
+    ]
+  }
+}

@@ -10,6 +10,7 @@ RUN pip install -r requirements.txt
 # Copiar nuestro código fuente de la aplicación a la imagen
 COPY scraper.py .
 COPY lambda_handler.py .
+COPY bedrock_analyzer.py .
 
 # Definir el comando que Lambda ejecutará cuando se inicie el contenedor.
 CMD [ "lambda_handler.handler" ]
