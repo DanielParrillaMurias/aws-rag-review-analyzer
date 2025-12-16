@@ -1,51 +1,89 @@
-# Analista de Opiniones con IA Generativa (RAG) en AWS
+# 🎬 AI-Powered Movie Review Analyst (RAG Architecture)
 
-Este proyecto es un pipeline de datos 100% serverless construido en AWS que demuestra habilidades en Ingeniería de la Nube, MLOps e Inteligencia Artificial Generativa. El sistema implementa un patrón de **Retrieval-Augmented Generation (RAG)** para analizar reseñas de películas de **IMDb** en tiempo real.
+![AWS](https://img.shields.io/badge/AWS-Serverless-orange)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Docker](https://img.shields.io/badge/Docker-Container-blue)
+![Bedrock](https://img.shields.io/badge/AI-Claude%203-purple)
 
-## Descripción General del Proyecto
+Este proyecto implementa un pipeline **RAG (Retrieval-Augmented Generation)** 100% serverless en AWS. El sistema extrae reseñas de películas en tiempo real, las procesa utilizando Modelos de Lenguaje (LLMs) y expone un análisis de sentimiento estructurado a través de una API pública.
 
-El objetivo es extraer las reseñas de los usuarios de una página de película específica en IMDb, utilizar un Large Language Model (LLM) para generar un análisis de sentimiento y un resumen de "pros y contras", y exponer estos insights a través de una API REST.
+## 🏗️ Arquitectura de la Solución
 
-Este proyecto sirve como una pieza central de mi portfolio y como una herramienta de aprendizaje práctico para la certificación **AWS Certified Solutions Architect - Associate**.
+El sistema sigue una arquitectura orientada a eventos y basada en contenedores para garantizar la portabilidad y la escalabilidad.
 
-## Arquitectura de la Solución
+```mermaid
+graph LR
+    User(Cliente / Postman) -- "POST /analyze (JSON)" --> APIG[Amazon API Gateway]
+    APIG -- "Proxy Integration" --> Lambda[AWS Lambda]
 
-El pipeline sigue una arquitectura serverless y orientada a eventos, utilizando los siguientes servicios de AWS:
+    subgraph "AWS Lambda (Docker Container)"
+        Lambda -- "1. Scrape HTML" --> IMDb[(IMDb Website)]
+        IMDb -- "Raw Reviews" --> Lambda
+        Lambda -- "2. Prompt Engineering" --> Bedrock[Amazon Bedrock]
+        Bedrock -- "3. Analysis (Claude 3)" --> Lambda
+    end
 
-![Diagrama de Arquitectura (Placeholder)](./images/architecture_diagram.png)
-_Un diagrama de la arquitectura se añadirá aquí una vez que los componentes estén definidos._
+    Lambda -- "JSON Response (Pros/Cons)" --> APIG
+    APIG --> User
+```
 
-1.  **Disparador (Trigger):** Un scheduler de **Amazon EventBridge** invoca el pipeline una vez al día.
-2.  **Extracción (Retrieve):** Una función **AWS Lambda** (Python) se activa, realiza web scraping sobre la URL de la página de reseñas de una película en **IMDb** para extraer las opiniones de los usuarios y las almacena temporalmente en un bucket de **Amazon S3**.
-3.  **Aumento y Generación (Augment & Generate):** La misma función Lambda formatea las reseñas extraídas para crear un prompt enriquecido. Este prompt se envía a **Amazon Bedrock** (utilizando el modelo Claude 3 Sonnet) para realizar:
-    - Análisis de sentimiento general.
-    - Generación de un resumen de puntos positivos (Pros).
-    - Generación de un resumen de puntos negativos (Contras).
-4.  **Persistencia (Storage):** Los insights generados por el LLM se almacenan en una tabla de **Amazon DynamoDB** para un acceso rápido y estructurado.
-5.  **Exposición (Exposure):** Una segunda función **AWS Lambda**, actuando como un microservicio, se expone a través de **Amazon API Gateway**. Esto crea un endpoint RESTful (`GET /reviews/{movie_id}`) que permite a aplicaciones cliente consultar los análisis almacenados en DynamoDB.
+## 🚀 Stack Tecnológico
 
-## Stack Tecnológico
+- **Computación:** AWS Lambda (Arquitectura ARM64/Graviton).
+- **Empaquetado:** Docker & Amazon ECR (para gestión de dependencias complejas y paridad de entorno).
+- **IA Generativa:** Amazon Bedrock (Modelo: Anthropic Claude 3 Sonnet).
+- **Exposición:** Amazon API Gateway (HTTP API).
+- **Lenguaje:** Python 3.12 (Boto3, BeautifulSoup4).
+- **Infraestructura:** Gestionada mediante AWS Console & CLI.
 
-- **Proveedor de Nube:** Amazon Web Services (AWS)
-- **Lenguaje de Programación:** Python
-- **Patrón de IA:** RAG (Retrieval-Augmented Generation)
-- **Servicios Clave de AWS:**
-  - **Computación:** AWS Lambda
-  - **IA Generativa:** Amazon Bedrock (Claude 3 Sonnet)
-  - **Almacenamiento:** Amazon S3, Amazon DynamoDB
-  - **Orquestación:** Amazon EventBridge
-  - **Redes y Exposición:** Amazon API Gateway
-- **Infraestructura como Código (IaC):** Terraform (objetivo final)
-- **Control de Versiones:** Git / GitHub
+## ✨ Características Clave
 
-## Próximos Pasos y Fases del Proyecto
+- **Análisis en Tiempo Real:** No utiliza bases de datos pre-cargadas; los datos se obtienen en el momento de la petición.
+- **Salida Estructurada:** Utiliza técnicas de _Prompt Engineering_ y limpieza de datos (`raw_decode`) para garantizar que el LLM siempre devuelva un JSON válido.
+- **Soporte UTF-8:** Manejo correcto de caracteres especiales y tildes en la respuesta.
+- **Arquitectura Híbrida:** El handler soporta tanto invocación directa (para tests) como eventos proxy de API Gateway.
 
-El proyecto se está desarrollando en las siguientes fases:
+## 🔌 Uso de la API
 
-- [x] **Fase 0: Configuración y Seguridad**
-- [ ] **Fase 1: El Scraper (Retrieval)**
-- [ ] **Fase 2: La Inteligencia (Augment & Generate)**
-- [ ] **Fase 3: La Persistencia (Storage)**
-- [ ] **Fase 4: La Exposición (API)**
-- [ ] **Fase 5: La Automatización (Orquestación)**
-- [ ] **Fase 6: Infraestructura como Código (IaC)**
+Puedes probar el sistema enviando una petición POST al endpoint público.
+
+**Endpoint:** `POST https://3im37m910l.execute-api.eu-west-1.amazonaws.com/analyze`
+
+**Ejemplo con cURL:**
+
+```bash
+curl -X POST "https://3im37m910l.execute-api.eu-west-1.amazonaws.com/analyze" \
+     -H "Content-Type: application/json" \
+     -d '{"url": "https://www.imdb.com/title/tt0068646/reviews"}'
+```
+
+**Respuesta de Ejemplo:**
+
+```json
+{
+  "message": "Éxito",
+  "data": {
+    "sentiment": "Positivo",
+    "summary": "Una obra maestra del cine...",
+    "pros": [
+      "Actuaciones legendarias",
+      "Dirección impecable",
+      "Guion profundo"
+    ],
+    "cons": ["Ritmo lento para audiencias modernas"]
+  }
+}
+```
+
+## 🛠️ Despliegue y Desarrollo Local
+
+El proyecto utiliza un flujo de trabajo basado en Docker:
+
+1.  **Construcción:** `docker build --platform linux/arm64 -t rag-review-scraper .`
+2.  **Etiquetado:** `docker tag rag-review-scraper:latest <ECR_URI>:latest`
+3.  **Subida:** `docker push <ECR_URI>:latest`
+4.  **Despliegue:** Actualización de la imagen en la función Lambda.
+
+---
+
+_Proyecto desarrollado como parte de un portfolio de Cloud Engineering & AI._
