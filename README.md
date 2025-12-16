@@ -47,12 +47,12 @@ graph LR
 
 Puedes probar el sistema enviando una petición POST al endpoint público.
 
-**Endpoint:** `POST https://3im37m910l.execute-api.eu-west-1.amazonaws.com/analyze`
+**Endpoint:** `POST https://<API_ENDPOINT>.execute-api.eu-west-1.amazonaws.com/analyze`
 
 **Ejemplo con cURL:**
 
 ```bash
-curl -X POST "https://3im37m910l.execute-api.eu-west-1.amazonaws.com/analyze" \
+curl -X POST "https://<API_ENDPOINT>.execute-api.eu-west-1.amazonaws.com/analyze" \
      -H "Content-Type: application/json" \
      -d '{"url": "https://www.imdb.com/title/tt0068646/reviews"}'
 ```
